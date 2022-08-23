@@ -1,166 +1,154 @@
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedList;
-import java.util.List;
-import java.util.StringTokenizer;
+import java.util.PriorityQueue;
+import java.util.Queue;
+import java.util.Scanner;
 
 public class Main {
-	static int n, m, d, totalcnt;
-	static int map[][];
-	static boolean select[];
+	static int[][] origin, copy;
+	static int N, M, D;
+	static int ans;
+	static boolean[] select; // 궁수 위치 뽑는 조합.
 
-	public static void main(String[] args) throws IOException {
-		BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-		StringTokenizer st = new StringTokenizer(br.readLine());
-		ArrayList<Enemy> en = new ArrayList<>();
-		n = Integer.parseInt(st.nextToken());
-		m = Integer.parseInt(st.nextToken());
-		d = Integer.parseInt(st.nextToken());
-		map = new int[n + 1][m];
-		select = new boolean[m];
-		for (int i = 0; i < n; i++) {
-			st = new StringTokenizer(br.readLine());
-			for (int j = 0; j < m; j++) {
-				map[i][j] = Integer.parseInt(st.nextToken());
-				if (map[i][j] == 1) {
-					en.add(new Enemy(i, j));
-				}
+	static int[] di = { 0, -1, 0 }; // 왼, 위, 오 순서로 적을 탐색
+	static int[] dj = { -1, 0, 1 };
+
+	public static void main(String[] args) {
+		Scanner sc = new Scanner(System.in);
+
+		N = sc.nextInt();
+		M = sc.nextInt();
+		D = sc.nextInt();
+
+		origin = new int[N][M];
+		for (int i = 0; i < N; i++) {
+			for (int j = 0; j < M; j++) {
+				origin[i][j] = sc.nextInt();
 			}
-		}
-
-		comb(0, 0, en);
-		System.out.println(totalcnt);
+		} // end input
+		select = new boolean[M];
+		ans = 0;
+		comb(0, 0);
+		System.out.println(ans);
 	}
 
-	static class Enemy {
-		int x, y;
-
-		public Enemy(int x, int y) {
-			this.x = x;
-			this.y = y;
-		}
-	}
-
-	static void comb(int idx, int cnt, ArrayList<Enemy> en) {
+	private static void comb(int idx, int cnt) {
 		if (cnt == 3) {
-//			for (int i = 0; i < select.length; i++) {
-//				System.out.print(select[i] + " ");
-//			}
-//			System.out.println();
-			run(map, en);
+//			System.out.println(Arrays.toString(select));
+			copy = deepcopy(origin); // 궁수배치해서 시뮬레이션 하기 전에 원본 복사!
+			int score = 0;
+			for (int turn = 0; turn < N; turn++) {
+				score += attack(); // 궁수 턴
+//				print(copy);
+				move(); // 적들이 내려오는 턴.
+//				print(copy);
+			}
+			ans = Math.max(ans, score);
 			return;
 		}
-		if (idx == m)
+		if (idx == M)
 			return;
+
 		select[idx] = true;
-		comb(idx + 1, cnt + 1, en);
+		comb(idx + 1, cnt + 1);
 		select[idx] = false;
-		comb(idx + 1, cnt, en);
+		comb(idx + 1, cnt);
 	}
 
-	static void run(int[][] origin, ArrayList<Enemy> cl) {
-		int[][] copy = deepcopy(origin);
-		ArrayList<Enemy> en = (ArrayList<Enemy>) cl.clone();
-		int cnt = 0;
-//		System.out.println("---------------------------------------------------");
-		while (!en.isEmpty()) {
-			LinkedList<Enemy> loc = new LinkedList<>();
-			for (int i = 0; i < select.length; i++) {
-				int mindist = Integer.MAX_VALUE, x = 0, y = Integer.MAX_VALUE;
-				if (select[i]) {
-					for (int e = en.size()-1; e >=0 ;e--) {
-						int dist = (Math.abs(n - en.get(e).x) + Math.abs(i - en.get(e).y));
-						if (d >= dist) {//&& y>en.get(e).y
-							if( dist < mindist ) {
-								mindist = dist;
-								x = en.get(e).x;
-								y = en.get(e).y;
-							}else if(dist==mindist&& y>en.get(e).y) {
-								mindist = dist;
-								x = en.get(e).x;
-								y = en.get(e).y;
-							}
-
-					}
-					}
-				}
-
-				if (check(loc, x, y)) {
-					loc.add(new Enemy(x, y));
-				}
+	private static void move() {
+		for(int i=N-1; i-1>=0; i--) {
+			for(int j=0; j<M; j++) {
+				copy[i][j] = copy[i-1][j];
 			}
-//			System.out.println("지울거");
-//			print(loc);
-			if (loc.size() != 0) {
-				for (Enemy e : loc) {
-					for (int j = 0; j < en.size(); j++) {
-						if (en.get(j).x == e.x && en.get(j).y == e.y) {
-							en.remove(j);
-							cnt++;
-							break;
+		}
+		for(int j=0; j<M; j++) { // 다 끌어 내렸으면 맨윗행 지워주기
+			copy[0][j] =0;
+		}
+	}
+
+	private static int attack() {
+		// 3명의 궁수가 각각 타겟을 죽이지는 않고 겨냥만 하게 해야함.
+
+		for (int j = 0; j < M; j++) { // 궁수 위치 찾아야함.
+			if (select[j]) { // 궁수 여깄다! copy[N][j] 위치라고 생각하고 탐색 시작 !
+				Queue<Point> queue = new LinkedList<>(); // 궁수좌표. 궁수 주변칸(빈칸, 적) 좌표들이 들어갈거임.
+				PriorityQueue<Point> enemy = new PriorityQueue<>();
+
+				boolean[][] visit = new boolean[N][M];
+				queue.add(new Point(N, j)); // 사실 N번행은 없는 행이라.. 궁수 있는.. visit 시작점은 안할래..
+
+				int dist = 0;
+				while (!queue.isEmpty() && dist <= D) { // 현재 큐에 좌표가 있고 그 거리가 D이하일 때에만 진행
+					int size = queue.size();
+					for (int s = 0; s < size; s++) {
+						Point now = queue.poll();
+
+						if (copy[now.i][now.j] >= 1) { // 쏴죽일 대상이다!!(다른 궁수가 찜하면 ++돼있을 거라서;;)
+							enemy.add(now);
+						}
+
+						for (int d = 0; d < 3; d++) {
+							int nexti = now.i + di[d];
+							int nextj = now.j + dj[d];
+							if (nexti >= 0 && nexti < N && nextj >= 0 && nextj < M && !visit[nexti][nextj]) {
+								visit[nexti][nextj] = true;
+								queue.add(new Point(nexti, nextj));
+							}
 						}
 					}
-				}
-			}
-			copy = movedown(copy, en);
+					dist++;
+					if (!enemy.isEmpty()) { // 방금전 그 거리에서 쏴죽일 적이 있었네?!
+						Point target = enemy.poll(); // PQ라서 제일 왼쪽에 있는 애가 알아서 나옴.
+						copy[target.i][target.j]++;
+						break; // end bfs for archer now
+					}
+				} // end while
+			} // end if archer
+		} // end for M
 
-//			System.out.println("cnt " + cnt);
-		}
-		totalcnt = Math.max(cnt, totalcnt);
-	}
-
-	static boolean check(LinkedList<Enemy> loc, int x, int y) {
-		if (loc.isEmpty()) {
-			if (x != 0)
-				return true;
-			else
-				return false;
-		} else {
-			for (int i = 0; i < loc.size(); i++) {
-				if ((x == 0) || (loc.get(i).x == x && loc.get(i).y == y)) {
-					return false;
+		int cnt = 0;
+		for (int i = 0; i < N; i++) {
+			for (int j = 0; j < M; j++) {
+				if (copy[i][j] > 1) {
+					copy[i][j] = 0;
+					cnt++;
 				}
 			}
 		}
-		return true;
-	}
+		return cnt;
+	}// end bfs function
 
-	static int[][] deepcopy(int[][] origin) {
-		int[][] copy = new int[n + 1][m];
-		for (int i = 0; i < origin.length; i++) {
-			for (int j = 0; j < origin[i].length; j++) {
-				copy[i][j] = origin[i][j];
+	static int[][] deepcopy(int[][] map) {
+		int[][] tmp = new int[map.length+1][map[0].length];
+		for (int i = 0; i < map.length; i++) {
+			for (int j = 0; j < map[i].length; j++) {
+				tmp[i][j] = map[i][j];
 			}
 		}
-		return copy;
+		return tmp;
 	}
 
-	static int[][] movedown(int[][] om, ArrayList<Enemy> en) {
-		int[][] copy = new int[n + 1][m];
-		for (int i = 1; i < n; i++) {
-			for (int j = 0; j < m; j++) {
-				copy[i][j] = om[i - 1][j];
+	static void print(int[][] map) {
+		for (int i = 0; i < N; i++) {
+			for (int j = 0; j < M; j++) {
+				System.out.print(map[i][j]);
 			}
+			System.out.println();
 		}
-		for (int e = en.size() - 1; e >= 0; e--) {
-			int x = en.get(e).x + 1;
-			int y = en.get(e).y;
-			if ((int) x >= n) {
-				en.remove(e);
-			} else {
-				en.remove(e);
-				en.add(new Enemy(x, y));
-			}
-		}
-		return copy;
+		System.out.println("-----------------");
 	}
 
-	static void print(List<Enemy> en) {
-		for (int i = 0; i < en.size(); i++) {
-			System.out.println(en.get(i).x + " " + en.get(i).y);
+	static class Point implements Comparable<Point> {
+		int i, j;
+
+		Point(int i, int j) {
+			this.i = i;
+			this.j = j;
 		}
-		System.out.println();
+
+		@Override
+		public int compareTo(Point o) {
+			return this.j - o.j;
+		}
 	}
 }
